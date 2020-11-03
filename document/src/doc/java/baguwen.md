@@ -1,12 +1,19 @@
 
 数据结构
 多线程
-锁
+## 锁
 synchronized
+偏向锁、轻量级锁、重量级锁
 AQS
+ReentryLock
 无锁队列
+disruptor
 缓存
+guava cache
+Caffeine Cache
+
 限流
+guava rater
 
 JVM内存
 垃圾回收期
