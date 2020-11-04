@@ -1,6 +1,11 @@
 
 数据结构
+
+![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png?imageMogr2/auto-orient/strip|imageView2/2/w/1199/format/webp) 
+
 多线程
+JMM
+线程安全
 ## 锁
 synchronized
 偏向锁、轻量级锁、重量级锁
@@ -37,8 +42,11 @@ innoDB引擎
 死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
 分库分表jbdc-sharding
 
-codis
+redis
 存储数据结构
+string：常用作key-value存储；incr/decr 用作计数器；
+list：双向列表结构。支持左右两端存取数据，支持范围读取；支持查询列表长度。
+set：
 分片
 扩容
 
