@@ -6,7 +6,7 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="document" />
+        <module name="document (1)" />
         <module name="javaCore" />
         <module name="rpc" />
         <module name="chopperDemo" />
