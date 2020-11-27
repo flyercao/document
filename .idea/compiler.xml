@@ -9,6 +9,7 @@
         <module name="document (1)" />
         <module name="javaCore" />
         <module name="rpc" />
+        <module name="document" />
         <module name="chopperDemo" />
       </profile>
     </annotationProcessing>
