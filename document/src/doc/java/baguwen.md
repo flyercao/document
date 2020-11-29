@@ -4,7 +4,7 @@
 ![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png) 
 
 
-### 多线程
+## 多线程
 BLOCKED：一个线程因为等待对象或类的监视器锁被阻塞产生的状态。只有执行synchronize关键字没有获取到锁才会进入。进入同步代码块执行object.wait方法进入的是**WAITING**状态。
 WAITING：线程通过notify,join,LockSupport.park方式进入wating状态，一直等待其他线程唤醒(notify或notifyAll)才有机会进入RUNNABLE状态。sleep、wait和lock方式都会使线程进入WAITING状态。
 interrupted是线程的一个标志位。其他线程可以调用该线程的interrupt()方法对其进行中断操作，同时该线程可以调用isInterrupted（）来感知其他线程对其自身的中断操作，从而做出响应。
@@ -21,6 +21,7 @@ happens-before原则：JMM可以通过happens-before关系向程序员提供跨�
 在多线程开发时需要从原子性，有序性，可见性三个方面进行考虑。
 
 ### 锁
+## 锁
 synchronized
 偏向锁、轻量级锁、重量级锁
 AQS
@@ -32,22 +33,32 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 队列：队列的头（消费者要频繁使用），尾（生产者要频繁使用）以及长度（生产者和消费者都需要频繁更改）会产生资源竞争。queue会成为很大的垃圾回收源，队列中的对象需要被分配和替换。
 
 ![github](https://img-blog.csdn.net/20171221134247821) 
-环形队列：1.预分配大数组，避免频繁创建和销毁对象，频繁GC；2.
+缓存行填充：就是每次把数据对齐到跟缓存行（通常是64B）一样大小。
+环形队列：1.预分配大数组，避免频繁创建和销毁对象，频繁GC；
+无锁：避免使用synchronized和lock锁，使用cas和volatile实现线程安全。
 关注点隔离：生产者/消费者栅栏（barriers）。通过CAS操作处理生产者之间对于写入位置的竞争；写入完成后更新SequenceBarrier（包含游标cursor）,通知消费者，这里其实会存在等待，有多种等待策略（各种）；消费者之间通过CAS协调读取位置
-序号：每个生产者和消费者都维护自己的序号，生产者通过cas竞争下一个可用位置，数据写入后，通过内存栅栏+自旋的方式更新游标（cursor）。
+多生产者：1.生产者之间（cas+自旋）向MultiProducerSequencer.cursor竞争写入位置，并确保不会覆盖最慢的消费者组的workSequence；2.在该位置写入值；3.在MultiProducerSequencer.availableBuffer的对应位置写入0，标记为可读；4.通知消费者；
+多消费者：1.每组消费者都有workSequence消费序号，每个线程都有自己的sequence序号，线程sequence通过cas竞争获取workSequence的值并加1；2.如果sequence小于cachedAvailableSequence，则说明可以一直消费到cachedAvailableSequence。3.如果大于，则说明已读完了，需要从生产者cursor更新最大可读Sequence。
+批量效应：当消费者等待RingBuffer中可用的前进游标序号时，如果消费者发现RingBuffer游标自上次检查以来已经前进了多个序号，消费者可以直接处理所有可用的多个序号，而不用引入并发机制。
+应用场景：高性能跨线程通信，生产者消费者模型，日志处理。
+
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存
 guava cache
 Caffeine Cache
-cursor
+
 限流
 guava rater
 降级
 熔断
 隔离
 
-JVM内存
-垃圾回收期
+# JVM内存
+https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
+
+
+
+垃圾回收器
 类加载机制
 类初始化时机：只有当对类的主动使用的时候才会导致类的初始化。类加载的过程包括加载、验证、准备、解析、初始化五个阶段
 加载：查找并加载类的二进制数据，转化为方法区的运行时数据结构，在Java堆中生成一个代表这个类的java.lang.Class对象。
@@ -95,9 +106,26 @@ list：双向列表结构。支持左右两端存取数据，支持范围读取�
 set：
 分片
 扩容
-codis
+## redis
+![github](https://pic4.zhimg.com/80/v2-d1128bb6e62db58955215c4c05ac1eab_1440w.jpg)
+String:缓存K-V结构；计数器；
+Hash：缓存多K-V对
+List：有序列表。高性能分页；简单消息队列；
+Set：无序集合。全局去重；集合的交集、并集、差集的操作。
+Sorted Set：有序集合。排行榜；优先级队列；
+
+Bitmap：位图（key为long，value为boolean的set），保存大规模的Boolean值。签到、在线状态等；BITCOUNT全局去重计数；BITOP 命令支持 AND 、 OR 、 NOT 、 XOR 操作；可以通过插件支持redis版BloomFilter
+HyperLogLog：极高性能的全局去重计数（估算）。
+Geospatial：地理空间(geospatial)以及索引半径查询。两点距离；经纬度返回Geohash；Geohash返回相近经纬度；圈内的所有位置；   
+pub/sub：消息生产者消费者模式，数据可靠性无法保证，不建议生产环境使用。
+pipeline：批量提交命令，批量返回结果，期间独占连接，返回结果会占用更多内存。
+Lua脚本：多个脚本一次请求，减少网络开销；原子操作，无需担心竞争问题；复用，脚本会缓存在服务器，无需每次传输。
+事务
+https://zhuanlan.zhihu.com/p/91539644
 
 mongo
 
 hbase
 
+分布式系统设计
+微服务架构
