@@ -9,7 +9,6 @@
         <module name="document (1)" />
         <module name="javaCore" />
         <module name="rpc" />
-        <module name="document" />
         <module name="chopperDemo" />
       </profile>
     </annotationProcessing>
@@ -18,6 +17,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="chopperDemo" options="-parameters" />
       <module name="document" options="-parameters" />
+      <module name="document (1)" options="-parameters" />
       <module name="javaCore" options="-parameters" />
       <module name="rpc" options="-parameters" />
     </option>
