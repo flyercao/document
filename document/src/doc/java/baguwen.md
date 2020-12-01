@@ -55,9 +55,9 @@ guava rater
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
 
-
-
 垃圾回收器
+
+
 类加载机制
 类初始化时机：只有当对类的主动使用的时候才会导致类的初始化。类加载的过程包括加载、验证、准备、解析、初始化五个阶段
 加载：查找并加载类的二进制数据，转化为方法区的运行时数据结构，在Java堆中生成一个代表这个类的java.lang.Class对象。
@@ -86,13 +86,8 @@ SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放�
 实现原理
 事务传播机制
 
-dubbo RPC
-原理
-参数优化
-
-
 mysql
-innoDB引擎
+innoDB引擎：完整支持ACID事务，在线事务处理。表锁、行锁；通过多版本并发控制MVCC来获得高并发性，并实现了4中隔离级别，默认Read Repeatable，使用next-key-locking间隙锁的策略来避免幻读。
 事务机制
 主键索引、查询优化
 死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
@@ -166,6 +161,11 @@ hbase
 
 分布式系统设计
 微服务架构
+
+
+dubbo
+原理
+参数优化
 
 
 流计算
