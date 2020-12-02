@@ -87,8 +87,12 @@ SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放�
 事务传播机制
 
 mysql
-innoDB引擎：完整支持ACID事务，在线事务处理。表锁、行锁；通过多版本并发控制MVCC来获得高并发性，并实现了4中隔离级别，默认Read Repeatable，使用next-key-locking间隙锁的策略来避免幻读。
+innoDB引擎：完整支持ACID事务，在线事务处理。表锁、行锁；通过多版本并发控制MVCC来获得高并发性，并实现了4种隔离级别，默认Read Repeatable，使用next-key-locking间隙锁的策略来避免幻读。
 事务机制
+Atom原子性：当事务对数据库进行修改时，InnoDB会生成对应的undo log；如果事务执行失败或调用了rollback，导致事务需要回滚，便可以利用undo log中的信息将数据回滚到修改之前的样子。当发生回滚时，InnoDB会根据undo log的内容做与之前相反的工作。
+Durability持久性：当数据修改时，除了修改Buffer Pool中的数据，还会在redo log记录这次操作；当事务提交时，会调用fsync接口对redo log进行刷盘。如果MySQL宕机，重启时可以读取redo log中的数据，对数据库进行恢复。
+Isolation隔离性:InnoDB通过锁机制和MVCC机制保证多并发下的数据隔离。
+
 主键索引、查询优化
 死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
 分库分表jbdc-sharding
