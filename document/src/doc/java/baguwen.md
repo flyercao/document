@@ -54,7 +54,7 @@ guava rater
 
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
-
+https://www.jianshu.com/p/76959115d486
 垃圾回收器
 
 
@@ -81,10 +81,11 @@ SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放�
 所以需要线程上下文类加载器（contextClassLoader）。初始线程的上下文类加载器是系统类加载器（AppClassLoader）,在线程中运行的代码可以通过此类加载器来加载类和资源。
 
 设计模式
+ddd
 
-事务隔离级别
-实现原理
+
 事务传播机制
+
 
 mysql
 缓冲池优化：InnoDB对传统的LRU算法做了一些优化，LRU列表中添加了midpoint位置，将缓冲池分为冷热两部分，两部分数据根据策略进行交换。
@@ -94,13 +95,32 @@ DoubleWrite：保障数据完整性。在对脏页进行刷新时，先把脏数
 异步ID：异步IO在发送完IO请求后可以继续发出新的IO请求；且AIO可以进行IO Merge。
 刷新邻接页：当刷新一个脏页时，InnoDB会检测该页所在区的所有页，如果是脏页，那么一起进行刷新。这样可以利用AIO合并多个IO操作。
 innoDB引擎：完整支持ACID事务，在线事务处理。表锁、行锁；通过多版本并发控制MVCC来获得高并发性，并实现了4种隔离级别，默认Read Repeatable，使用next-key-locking间隙锁的策略来避免幻读。
+特性
 事务机制
 Atom原子性：当事务对数据库进行修改时，InnoDB会生成对应的undo log；如果事务执行失败或调用了rollback，导致事务需要回滚，便可以利用undo log中的信息将数据回滚到修改之前的样子。当发生回滚时，InnoDB会根据undo log的内容做与之前相反的工作。
 Durability持久性：当数据修改时，除了修改Buffer Pool中的数据，还会在redo log记录这次操作；当事务提交时，会调用fsync接口对redo log进行刷盘。如果MySQL宕机，重启时可以读取redo log中的数据，对数据库进行恢复。
-Isolation隔离性:InnoDB通过锁机制和MVCC机制保证多并发下的数据隔离。
+Isolation隔离性:InnoDB通过锁机制（含next-key lock）和MVCC机制（包括数据的隐藏列、基于undo log的版本链、ReadView）保证多并发下的数据隔离。MVCC最大的优点是读不加锁，因此读写不冲突，并发性能好。主要基于一下技术：
+```
+隐藏列：InnoDB中每行数据都有隐藏列，隐藏列中包含了本行数据的事务id、指向undo log的指针
+基于undo log的版本链：每行数据的隐藏列中包含了指向undo log的指针，而每条undo log也会指向更早版本的undo log，从而形成一条版本链
+ReadView：通过隐藏列和版本链，MySQL可以将数据恢复到指定版本；进行读操作时，会将读取到的数据中的事务id与快照事务id比较，从而判断数据对该ReadView是否可见，即对事务A是否可见。数据的事务id>readview_id,则不可见；生成readview时，数据的事务id已提交，则可见。
+读已提交（Read Commit）：避免脏读（读未提交数据）。事务每次select前生成readview，当select时，对于未提交的数据，数据事务id还未提交，该数据对ReadView不可见，则根据指针指向的undo log查询上一版本的数据。
+可重复读（Repeatable Read）：避免不可重复读。事务首次select前生成readview，当select时，对于未提交的数据，数据事务id还未提交或小于readview事务id，该数据对ReadView不可见，则根据指针指向的undo log查询上一版本的数据。
+串行读（Serializable）：MVCC避免幻读的机制与避免不可重复读非常类似，事务在首次select某范围内数据时生成readview，之后在此select该范围数据时，根据首次生成的readview对数据进行可见性判断，对于新插入的数据，事务根据其指针指向的undo log查询上一版本的数据，发现该数据并不存在，从而避免了幻读。
+
+RC与RR都使用了MVCC，主要区别在于RR是在事务开始后第一次执行select前创建ReadView，直到事务提交都不会再创建，RR可以避免脏读、不可重复读和幻读。RC每次执行select前都会重新建立一个新的ReadView，如果中间有其他事务提交的话，后续的select是可见的，可以避免脏读。
+对于加锁读select...for update，由于事务对数据进行加锁读后，其他事务无法对数据进行写操作，因此可以避免脏读和不可重复读。通过next-key lock，不仅会锁住记录本身(record lock的功能)，还会锁定一个范围(gap lock的功能)，因此，加锁读同样可以避免脏读、不可重复读和幻读，保证隔离性。
+如果在事务中第一次读取采用非加锁读，第二次读取采用加锁读，则如果在两次读取之间数据发生了变化，两次读取到的结果不一样，因为加锁读时不会采用MVCC。
+```
+Consistency一致性：一致性是事务追求的最终目标：前面提到的原子性、持久性和隔离性，都是为了保证数据库处于正确的状态。
+
+
+https://img2018.cnblogs.com/blog/1174710/201901/1174710-20190128201034603-681355962.png
 https://www.cnblogs.com/kismetv/p/10331633.html
 主键索引、查询优化
+全值匹配、最左前缀、索引列无计算、范围索引失效、空值不等失效、like最右、覆盖查询（不用回表）、explain法宝
 死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
+mysql主从延迟
 分库分表jbdc-sharding
 
 ## redis
