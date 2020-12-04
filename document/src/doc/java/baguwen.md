@@ -87,6 +87,12 @@ SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放�
 事务传播机制
 
 mysql
+缓冲池优化：InnoDB对传统的LRU算法做了一些优化，LRU列表中添加了midpoint位置，将缓冲池分为冷热两部分，两部分数据根据策略进行交换。
+Checkpoint：由于数据库采用write ahead log策略，需要通过Checkpoint来强制刷新内存数据到磁盘，缩短数据库启动和恢复时间。缓冲池溢出脏页、redo log满时，会强制CheckPoint。
+InsertBuffer：对于非唯一的非聚集索引，插入时如果该页不在缓存中，则先放到InsertBuffer对象，在一定条件下，与索引页进行merge，可以将多个插入合并成一次操作。提高写入性能。
+DoubleWrite：保障数据完整性。在对脏页进行刷新时，先把脏数据复制到内存中的doublewrite buffer，然后分两次写入磁盘的doublewrite（顺序写），最后写入数据到数据页（分散写）。
+异步ID：异步IO在发送完IO请求后可以继续发出新的IO请求；且AIO可以进行IO Merge。
+刷新邻接页：当刷新一个脏页时，InnoDB会检测该页所在区的所有页，如果是脏页，那么一起进行刷新。这样可以利用AIO合并多个IO操作。
 innoDB引擎：完整支持ACID事务，在线事务处理。表锁、行锁；通过多版本并发控制MVCC来获得高并发性，并实现了4种隔离级别，默认Read Repeatable，使用next-key-locking间隙锁的策略来避免幻读。
 事务机制
 Atom原子性：当事务对数据库进行修改时，InnoDB会生成对应的undo log；如果事务执行失败或调用了rollback，导致事务需要回滚，便可以利用undo log中的信息将数据回滚到修改之前的样子。当发生回滚时，InnoDB会根据undo log的内容做与之前相反的工作。
@@ -97,13 +103,6 @@ https://www.cnblogs.com/kismetv/p/10331633.html
 死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
 分库分表jbdc-sharding
 
-redis
-存储数据结构
-string：常用作key-value存储；incr/decr 用作计数器；
-list：双向列表结构。支持左右两端存取数据，支持范围读取；支持查询列表长度。
-set：
-分片
-扩容
 ## redis
 ![github](https://pic4.zhimg.com/80/v2-d1128bb6e62db58955215c4c05ac1eab_1440w.jpg)
 String:缓存K-V结构；计数器；
@@ -159,13 +158,6 @@ hbase：高可靠性、高性能、面向列、可伸缩、 实时读写的海�
 
 分布式系统设计
 微服务架构
-
-hbase
-批处理
-
-分布式系统设计
-微服务架构
-
 
 dubbo
 原理
