@@ -80,6 +80,8 @@ https://www.jianshu.com/p/76959115d486
 SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放在classpath路径下，Bootstrap类加载器无法直接加载。
 所以需要线程上下文类加载器（contextClassLoader）。初始线程的上下文类加载器是系统类加载器（AppClassLoader）,在线程中运行的代码可以通过此类加载器来加载类和资源。
 
+SPI
+
 设计模式
 ddd
 
@@ -119,11 +121,11 @@ https://img2018.cnblogs.com/blog/1174710/201901/1174710-20190128201034603-681355
 https://www.cnblogs.com/kismetv/p/10331633.html
 主键索引、查询优化
 全值匹配、最左前缀、索引列无计算、范围索引失效、空值不等失效、like最右、覆盖查询（不用回表）、explain法宝
-死锁分析https://www.cnblogs.com/jay-huaxiao/p/11456921.html
-mysql主从延迟
+mysql主从延迟：mysql的主从复制都是单线程的操作，DDL导致线程卡死。解决方案：从库SSD随机读；业务低峰期执行DDL；
 分库分表jbdc-sharding
 
 ## redis
+（https://www.cnblogs.com/4AMLJW/p/redis202004161644.html）
 ![github](https://pic4.zhimg.com/80/v2-d1128bb6e62db58955215c4c05ac1eab_1440w.jpg)
 String:缓存K-V结构；计数器；
 Hash：缓存多K-V对
@@ -147,7 +149,7 @@ redis cluster集群：高可用高扩展的无中心结构（分片+主备）；
 一致性哈希。对每一个key进行hash运算，被哈希后的结果在哪个token的范围内，则按顺时针去找最近的节点，这个key将会被保存在这个节点上。缺点（翻倍伸缩才能保证负载均衡）。
 虚拟槽分区。Redis Cluster采用的分区方式。把16384槽按照节点数量进行平均分配，由节点进行管理，对每个key按照CRC16规则进行hash运算，把hash结果对16383进行取余。可以对数据打散，又可以保证数据分布均匀
 
-缓存一致性：先更新数据库，再删缓存,极小概率出现不一致。终极方案，设置超时，订阅binlog，删除key。
+缓存一致性：更新数据库，再删缓存,失败则发消息，重新删除。终极方案，设置超时，订阅binlog，删除key。
 缓存穿透：外部的恶意攻击时，未命中缓存，直接查询DB。使用BloomFilter排除不存在对象。
 缓存击穿：某个热点数据失效，大量请求会穿透到DB。使用互斥锁（SETNX）查询DB和更新缓存。多个热点 key 同时失效，失效时间考虑随机数。
 缓存雪崩：快速失败+集群模式来保证高可用。
@@ -189,6 +191,15 @@ dubbo：高性能开源RPC框架，包含容错、负载均衡和服务治理等
 第十层：serialize层，数据序列化层，网络传输需要
 调用流程：https://baijiahao.baidu.com/s?id=1645744285641737459&wfr=spider&for=pc
 
+```
+client一个线程调用远程接口，生成一个唯一的ID（比如一段随机字符串，UUID等），Dubbo是使用AtomicLong从0开始累计数字的
+将打包的方法调用信息（如调用的接口名称，方法名称，参数值列表等），和处理结果的回调对象callback，全部封装在一起，组成一个对象object
+向专门存放调用信息的全局ConcurrentHashMap里面put(ID, object)
+将ID和打包的方法调用信息封装成一对象connRequest，使用IoSession.write(connRequest)异步发送出去
+当前线程再使用callback的get()方法试图获取远程返回的结果，在get()内部，则使用synchronized获取回调对象callback的锁， 再先检测是否已经获取到结果，如果没有，然后调用callback的wait()方法，释放callback上的锁，让当前线程处于等待状态。
+服务端接收到请求并处理后，将结果（此结果中包含了前面的ID，即回传）发送给客户端，客户端socket连接上专门监听消息的线程收到消息，分析结果，取到ID，再从前面的ConcurrentHashMap里面get(ID)，从而找到callback，将方法调用结果设置到callback对象里。
+监听线程接着使用synchronized获取回调对象callback的锁（因为前面调用过wait()，那个线程已释放callback的锁了），再notifyAll()，唤醒前面处于等待状态的线程继续执行（callback的get()方法继续执行就能拿到调用结果了），至此，整个过程结束。
+```
 原理：
 参数优化
 
@@ -204,11 +215,23 @@ flink
 稳定性
 限流、熔断、降级、补偿
 服务发现与治理
-分布式ID生成器
+分布式ID生成器：雪花算法64bit（41位，用来记录时间戳（毫秒），10位用来记录工作机器id（5位datacenterId 和 5位workerId），12位，序列号，用来记录同毫秒内产生的不同id）
 分布式锁
 分布式事务
-
+https://blog.csdn.net/lovexiaotaozi/article/details/89713937
+https://www.cnblogs.com/dailyprogrammer/p/12272760.html
 
 
 微服务架构
+业务拆分、组织架构升级
+按照业务进行系统应用拆分、数据库拆分、
+应用之间服务化调用
+问题：问题定位、稳定性、互相依赖
 
+Prometheus指标采集、Grafana配置监控报警、pinpoint全链路、ELK日志搜索
+dubbo rpc调用、zookeeper服务发现（临时节点失效后自动删除）、Diamond配置中心、接口熔断（Hystrix），功能降级，限流（ratelimter）
+Kafka、codis、shardingjdbc、elastic-job
+
+多线程https://blog.csdn.net/tanmomo/article/details/99671622
+锁https://www.cnblogs.com/lu51211314/p/10237154.html
+JVM垃圾回收https://blog.csdn.net/qq_41701956/article/details/100074023
