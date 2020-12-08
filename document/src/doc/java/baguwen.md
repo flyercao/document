@@ -176,9 +176,6 @@ durability（持久性）：通过journal日志和Write Concern写入策略可�
 hbase：高可靠性、高性能、面向列、可伸缩、 实时读写的海量数据分布式数据库
 批处理
 
-分布式系统设计
-微服务架构
-
 dubbo：高性能开源RPC框架，包含容错、负载均衡和服务治理等功能。Dubbo 是由阿里开源，后来加入了 Apache。
 第一层：service层，接口层，根据服务提供方和服务消费方的业务设计对应的接口和实现
 第二层：config层，配置层，主要是对dubbo进行各种配置的
@@ -200,5 +197,18 @@ dubbo：高性能开源RPC框架，包含容错、负载均衡和服务治理等
 jstorm
 flink
 
+分布式系统设计https://zhuanlan.zhihu.com/p/145015244
 
-https://github.com/Snailclimb/JavaGuide
+高性能
+并发、锁优化、缓存、异步消息、批量、连接池
+稳定性
+限流、熔断、降级、补偿
+服务发现与治理
+分布式ID生成器
+分布式锁
+分布式事务
+
+
+
+微服务架构
+
