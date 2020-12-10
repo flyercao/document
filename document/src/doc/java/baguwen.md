@@ -215,7 +215,8 @@ flink
 稳定性
 限流、熔断、降级、补偿
 服务发现与治理
-分布式ID生成器：雪花算法64bit（41位，用来记录时间戳（毫秒），10位用来记录工作机器id（5位datacenterId 和 5位workerId），12位，序列号，用来记录同毫秒内产生的不同id）
+分布式ID生成器：雪花算法64bit（41位，用来记录时间戳（毫秒），10位用来记录工作机器id（5位datacenterId 和 5位workerId），12位，序列号，用来记录同毫秒内产生的不同id）。
+时钟回拨问题：1.抛异常；2.等待；3.设计时钟回拨位，发生回拨时+1。
 分布式锁
 分布式事务
 https://blog.csdn.net/lovexiaotaozi/article/details/89713937
