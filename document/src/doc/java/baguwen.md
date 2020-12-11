@@ -214,7 +214,7 @@ flink
 并发、锁优化、缓存、异步消息、批量、连接池
 稳定性
 限流、熔断、降级、补偿
-服务发现与治理
+服务发现与治理：zookeeper（1.provider启动时在接口providers目录下创建临时子节点，写入自己的IP和端口；2.consumer启动时，订阅接口providers目录下所有子节点，并根据子节点信息解析提供者；consumer在接口consumers目录下创建临时子节点，写入自己的URL地址；3.增加提供者时，providers下面创建新临时子节点，zookeeper会推送节点信息给consumer；4.provider出现故障或下线时，由于临时节点与session有关，改临时节点会被自动删除；5.zookeeper宕机之后，服务提供者信息保存在内存和本地文件，无法感知到提供者变更
 分布式ID生成器：雪花算法64bit（41位，用来记录时间戳（毫秒），10位用来记录工作机器id（5位datacenterId 和 5位workerId），12位，序列号，用来记录同毫秒内产生的不同id）。
 时钟回拨问题：1.抛异常；2.等待；3.设计时钟回拨位，发生回拨时+1。
 分布式锁
@@ -232,6 +232,17 @@ https://www.cnblogs.com/dailyprogrammer/p/12272760.html
 Prometheus指标采集、Grafana配置监控报警、pinpoint全链路、ELK日志搜索
 dubbo rpc调用、zookeeper服务发现（临时节点失效后自动删除）、Diamond配置中心、接口熔断（Hystrix），功能降级，限流（ratelimter）
 Kafka、codis、shardingjdbc、elastic-job
+
+zookeeper：高可用、高性能、强一致性的分布式开源协调服务。适合同步服务、配置维护和集群命名和管理。
+目录树结构，节点可以存储少量数据；
+节点数据只能原子操作
+节点类型：1.永久节点，显式增加和删除；2.临时节点，生命周期跟session绑定，断开后会自动删除节点；
+节点自增：节点支持有序自增。
+监听节点：客户端可以watch节点的增、删、改操作，客户端今收到一条消息。
+分布式锁：1.客户端申请锁目录下创建临时有序节点，并返回该目录所有子节点；2.如果自己是排第一，则获取到锁，执行业务代码；3.如果不是排第一，则加锁失败；4.监听前一个临时节点的删除事件，直到收到通知消息；5.业务代码执行完，主动删除当前节点。如果创建改临时节点的客户端断开连接，zookeeper会清除该临时节点；6。zookeeper发现临时节点被删除，会通知监听该节点的客户端重新获取锁节点列表
+
+
+
 
 多线程https://blog.csdn.net/tanmomo/article/details/99671622
 锁https://www.cnblogs.com/lu51211314/p/10237154.html
