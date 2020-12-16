@@ -262,6 +262,11 @@ redlock：在2N+1台机器上，同时执行上面逻辑，N+1台机器执行成
 #### 分布式限流
 guava ratelimiter：next（上一次取数的终止时间点）speed（频率每秒） maxPermits(最大申请量)。1.(current-next)*speed表示当前桶令牌数；2.如果桶令牌数小于permit，可以预支，next为预支后的时间点；3.next>current表示已经预支，当前不可获取。
 分布式限流：基于redis实现，把ratelimiter的逻辑通过redis lua脚本实现。
+#### 一致性协议
+Paxos
+Raft
+Zab
+https://www.cnblogs.com/stateis0/p/9062126.html
 
 分布式事务
 两阶段（2PC）
@@ -286,3 +291,5 @@ cap理论
 多线程https://blog.csdn.net/tanmomo/article/details/99671622
 锁https://www.cnblogs.com/lu51211314/p/10237154.html
 JVM垃圾回收https://blog.csdn.net/qq_41701956/article/details/100074023
+
+架构：https://www.cnblogs.com/jiangzhaowei/p/9570638.html
