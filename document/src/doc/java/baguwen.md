@@ -212,7 +212,7 @@ zookeeper：高可用、高性能、强一致性的分布式开源协调服务�
 
 kafka
 partition：每个主题可以分为多个partition，每个partition实际存储为append log；每条消息根据时间顺序分配一个单调递增的offset，以日志的形式顺序追加到文件尾部；由生产者决定消息发送到哪个partition。
-
+https://blog.csdn.net/lingbo229/article/details/80761778
 https://www.jianshu.com/p/aa4c6994687e
 
 
