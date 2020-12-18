@@ -139,7 +139,6 @@ RC与RR都使用了MVCC，主要区别在于RR是在事务开始后第一次执�
 ```
 Consistency一致性：一致性是事务追求的最终目标：前面提到的原子性、持久性和隔离性，都是为了保证数据库处于正确的状态。
 
-
 https://img2018.cnblogs.com/blog/1174710/201901/1174710-20190128201034603-681355962.png
 https://www.cnblogs.com/kismetv/p/10331633.html
 主键索引、查询优化
@@ -163,14 +162,26 @@ pub/sub：消息生产者消费者模式，数据可靠性无法保证，不建�
 pipeline：批量提交命令，批量返回结果，期间独占连接，返回结果会占用更多内存。
 Lua脚本：多个脚本一次请求，减少网络开销；原子操作，无需担心竞争问题；复用，脚本会缓存在服务器，无需每次传输。
 事务：Redis 事务的本质是一组命令的集合；watch来实现乐观锁，在事务中不能改变被watch（锁）的值。命令错误则不执行，执行错误继续执行所有命令。
-持久化：RDB，定时把数据以快照的形式保存在磁盘上，效率高，数据丢失；AOF，将每一个收到的写命令都通过write函数追加到文件中。保证数据不丢失，文件大，效率低。
-生产配置：master：完全关闭持久化，这样可以让master的性能达到最好；slave：关闭快照持久化，开启AOF，并定时对持久化文件进行备份，然后关闭AOF的自动重写，然后添加定时任务，在每天Redis闲时（如凌晨12点）调用bgrewriteaof。
+持久化：
+RDB：定时fork子进程，把数据以快照的形式保存在磁盘上。效率高，备份文件，恢复快，数据丢失；
+AOF：将每一个收到的写命令都通过write函数写入缓冲区，根据同步策略追加到文件中，定期对AOF文件进行重写，保持最小命令量。保证数据不丢失，基本不影响客户端命令执行。文件大，恢复效率低。
+RDB-AOF：Redis 4.0新增了混合持久化。打开之后，aof rewrite 的时候就直接把 rdb 的内容写到 aof 文件开头。
+生产配置：master完全关闭持久化，这样可以让master的性能达到最好；slave关闭快照持久化，开启AOF，然后关闭AOF的自动重写，然后添加定时任务，在每天Redis闲时（如凌晨12点）调用bgrewriteaof。
 
-redis cluster集群：高可用高扩展的无中心结构（分片+主备）；
+redis cluster集群：高可用高扩展的无中心结构（分片+主备）；client随机选择节点发起请求，节点会进行moved重定向，
 容错：半数以上的master节点投票确认节点失联。1.master和slave都失联则集群不可用（可配置兼容部分失败）。2.半数master失联则不可用。
+选举：1.currentEpoch表示集群状态变更的递增版本号，节点的currentEpoch越大，表示数据越新。集群中所有节点的 currentEpoch 最终会达成一致。2.选举前，从节点会等待一段时间，数据越新，等待越短。节点把自己currentEpoch+1，广播给所有master进行投票；3.master节点 2s内不会重复为同一个master进行投票。
 数据分布
 一致性哈希。对每一个key进行hash运算，被哈希后的结果在哪个token的范围内，则按顺时针去找最近的节点，这个key将会被保存在这个节点上。缺点（翻倍伸缩才能保证负载均衡）。
 虚拟槽分区。Redis Cluster采用的分区方式。把16384槽按照节点数量进行平均分配，由节点进行管理，对每个key按照CRC16规则进行hash运算，把hash结果对16383进行取余。可以对数据打散，又可以保证数据分布均匀
+
+codis
+只是一个转发代理中间件，可以启动多个Codis 实例，供客户端使用，每个 Codis 节点都是对等的。
+虚拟槽分区：每个槽位都会唯一映射到后面的多个 Redis 实例之一，Codis 会在内存维护槽位和Redis 实例的映射关系。这样有了上面 key 对应的槽位，那么它应该转发到哪个 Redis 实例。
+Codis 将槽位关系存储在 zk 中，也支持etcd
+扩容：支持动态、自动扩容。迁移过程中，先请求原节点，原节点强制对该key进行迁移，之后再转发到新节点。
+缺点：部分命令不支持，（keys、BLPOP、PUBLISH），单key容量不宜过大，性能比原生稍差、依赖zk保障可用性、对新功能支持不友好
+优点：集群原理简单，后台管理方便，运维友好。
 
 缓存一致性：更新数据库，再删缓存,失败则发消息，重新删除。终极方案，设置超时，订阅binlog，删除key。
 缓存穿透：外部的恶意攻击时，未命中缓存，直接查询DB。使用BloomFilter排除不存在对象。
@@ -260,14 +271,26 @@ zookeeper（1.provider启动时在接口providers目录下创建临时子节点�
 #### 分布式锁
 zookeeper锁：可靠性很高，强一致性。依赖zookeeper，可用性不足，效率一般。
 redis锁：不可重入、单节点。加锁（SET anyLock current_client NX PX 30000），释放锁（lua脚本实现，如果value值为当前线程，则删除key）；重入锁通过hash结构来实现。（效率高，超时问题、分布式环境下数据同步问题、主从切换问题）
-redlock：在2N+1台机器上，同时执行上面逻辑，N+1台机器执行成功则成功。（效率稍低高，解决分布式环境下数据同步问题，维护成本高）
+redlock：在2N+1台机器上，同时执行上面逻辑，N+1台机器执行成功则成功。（效率稍低，解决分布式环境下数据同步问题，维护成本高）
 #### 分布式限流
 guava ratelimiter：next（上一次取数的终止时间点）speed（频率每秒） maxPermits(最大申请量)。1.(current-next)*speed表示当前桶令牌数；2.如果桶令牌数小于permit，可以预支，next为预支后的时间点；3.next>current表示已经预支，当前不可获取。
 分布式限流：基于redis实现，把ratelimiter的逻辑通过redis lua脚本实现。
 #### 一致性协议
-Paxos
+CAP理论：一致性（Consistency）、可用性（Availability）、分区容错性（Partition tolerance）
+BASE是Basically Available（基本可用）、Soft state（软状态）和Eventually consistent（最终一致性）。BASE是对CAP中一致性和可用性权衡的结果，即使无法做到强一致性（Strong consistency），但每个应用都可以根据自身的业务特点，采用适当的方式来使系统达到最终一致性（Eventual consistency）。
+
 Raft
+Raft将系统中的角色分为领导者（Leader，0~1个）、跟从者（Follower，1~n个）和候选人（Candidate，0~n个）；
+选举：
+1. 当服务器启动时，初始化为Follower。如果Follower在选举超时时间内没有收到Leader的heartbeat，就会等待一段随机的时间后发起一次Leader选举。
+2. Follower将其当前term加一然后转换为Candidate，它首先给自己投票并且给集群中的其他服务器发送投票请求。节点在同一次投票周期内，只给一个节点投票。多数的选票，成功选举为Leader；收到了Leader的消息，表示有其它服务器已经抢先当选了Leader；没有服务器赢得多数的选票，Leader选举失败，等待选举时间超时后发起下一次选举。
+3. Follower如果一段时间内没有收到Leader心跳，则认为Leader挂了，重新发起新一轮选主投票
+数据同步：
+1. 日志包含有序编号、当前任期、命令和前一条日志的编号和任期。如果follower找不到前一条日志的编号和任期，则拒绝该日志。
+2. Leader要求Followe遵从他的指令，都将这个新的日志内容追加到他们各自日志中，大多数follower收到日志并返回确认后，Leader发出commit命令。
+3. Leader通过强制Followers复制它的日志来处理日志的不一致，Followers上的不一致的日志会被Leader的日志覆盖。
 Zab
+基本原理与raft一致
 https://www.cnblogs.com/stateis0/p/9062126.html
 
 分布式事务
