@@ -98,6 +98,12 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存
 guava cache
+异步加载
+过期移除、容量移除、引用移除、显示移除
+异步刷新
+移除监听
+统计信息
+
 Caffeine Cache
 
 限流
