@@ -13,14 +13,23 @@ jstack 分析线程状态和栈信息
 jmap （分析类实例和空间占用，dump堆内存到文件）
 建议：-Xms和-Xmx的值设置成相等，避免动态调整内存大小；新生代尽量设置大一些；根据gc日志，结合延迟目标，分配新生代大小和比例
 短命大对象和数组；大循环创建对象；大批量处理数据；强引用缓存集合；长时间占用对象。
-
-
+案例：
+YGC每分钟10次，FGC每5分钟一次。
+配置内存2G，年轻代512M，Survivor默认8：1，采用CMS垃圾回收器。
+jstat命令发现Eden区容量小、增长快；Survivor区始终是100%；old区稳定增长；
+推断：Eden区过小，导致频繁YGC；YGC后存活对象大于Survivor区，直接进入old区；
+确认：增加YGC详细日志打印后，发现Survivor区age=1的对象占比非常高，存在过早晋升现象。
+尝试：调大Eden区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
 https://www.jianshu.com/p/76959115d486
-垃圾回收器
-
-
+## 垃圾回收器
+ParNew收集器 -XX:+UseParNewGC 标记复制算法
+CMS（Concurrent Mark Sweep） 标记清理算法，并发收集、低停顿，产生大量内存碎片
+初始标记（STW）、并发标记、重新标记（STW）、并发清除
+G1收集器：有分代，没有分区。老年代和新生代都是由多个大小固定的Region组成。会有短暂STW。
+1. 标记整理算法，不产生内存碎片
+2. 可预测停顿，可控制消耗在gc上时间小于n毫秒
 
 
 类加载机制
@@ -70,7 +79,7 @@ synchronized
 偏向锁、轻量级锁、重量级锁
 AQS
 ReentryLock
-#### 无锁队列
+#### 无锁队列Disruptor
 锁：锁竞争导致操作系统的上下文切换，执行线程的执行上下文丢失之前缓存的数据和指令集，给处理器带来严重的性能损耗。偏向锁在没有竞争时才有效；轻量级锁在竞争不激烈时有效，竞争激烈时，由于自旋给CPU带来压力。
 CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到内存栅栏，缓存一致性协议，也有开销。
 缓存行：如果两个变量不幸在同一个缓存行里，而且它们分别由不同的线程写入，那么这两个变量的写入会发生竞争，即为“伪共享”（false sharing）。
@@ -291,7 +300,12 @@ Raft将系统中的角色分为领导者（Leader，0~1个）、跟从者（Foll
 3. Leader通过强制Followers复制它的日志来处理日志的不一致，Followers上的不一致的日志会被Leader的日志覆盖。
 Zab
 基本原理与raft一致
-https://www.cnblogs.com/stateis0/p/9062126.html
+日志同步差异
+ZooKeeper在每次leader选举完成之后，都会进行数据之间的同步纠正，所以每一个轮次，大家都日志内容都是统一的。
+Raft在leader选举完成之后没有这个同步过程，而是靠之后的AppendEntries RPC请求的一致性检查来实现纠正过程，则就会出现上述案例中隔了几个轮次还不统一的现象
+投票过程差异
+Raft：每个轮次内server只能投票一次，哪个candidate先请求就获得投票，可能出现多个candidate获得票数一样的情况，Raft通过candidate设置随机不同的超时时间，那么先超时的先发起投票获得选举。
+ZooKeeper：在每个轮次内，可以投多次票。遇到更大更新的日志则更新投票结果，通知所有人，不存在获取票数一样多的情况，但是时间会更长
 
 分布式事务
 两阶段（2PC）
