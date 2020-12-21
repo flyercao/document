@@ -333,8 +333,17 @@ Kafka、codis、shardingjdbc、elastic-job
 cap理论
 
 
+
+设计思想：通过巧妙的设计提高效率，避免资源的浪费
+预操作：对于耗时要求极高的业务，可以在登录时进行预加载操作。以空间换时间。
+实时操作：常规操作，实时查询，实时加载，定时过期。
+延迟操作：对于定时删除和失效之类的操作，增加失效时间字段，通过时间判断数据失效。延后统一批量删除。
+
+延迟操作代替定时任务实时操作：目前定时刷新等操作是通过后台定时任务执行的，单独线程消耗资源；
+令牌桶：通过记录下次可用时间代替保存令牌，来节省定时添加令牌的操作。
+
 多线程https://blog.csdn.net/tanmomo/article/details/99671622
 锁https://www.cnblogs.com/lu51211314/p/10237154.html
-JVM垃圾回收https://blog.csdn.net/qq_41701956/article/details/100074023
+JVM垃圾回收https://blog .csdn.net/qq_41701956/article/details/100074023
 
 架构：https://www.cnblogs.com/jiangzhaowei/p/9570638.html

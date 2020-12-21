@@ -5,7 +5,7 @@
 ### 高效读写
 Guava Cache借鉴了ConcurrentHashMap的实现原理(基于1.7版本的实现，即没有使用红黑树)，使用了桶+链表的方式来实现。
 ### 自动清除数据
-1.基于容量和总量：缓存项数量和容量大小限制，二者只能设置一个。设置数量时，每项的权重为1。*写入*或*重载*时从accessQueue驱逐最早访问的数据，直到总量小于max值。
+1.基于容量和总量：缓存项数量和容量大小限制，二者只能设置一个。设置数量时，每项的权重为1。*写入*或*重载*时从RecentQueue驱逐最早访问的数据，直到总量小于max值。
 1.基于写入或读取时间：维护accessQueue和writeQueue两个segment内队列（非线程安全）和AccessQueue全局队列（线程安全）。按照access和write时间排序倒排序，*读取*或*写入*时，移除过期数据。
 1.基于内存回收：通过使用弱引用的键、或弱引用的值、或软引用的值，Guava Cache可以把缓存设置为允许垃圾回收：
 ```
@@ -17,7 +17,7 @@ CacheBuilder.softValues()：使用软引用存储值。软引用只有在响应�
 LinkedHashMap实现LRU算法：通过HashMap来存储元素，从而解决了读写元素的时间复杂度的问题。我们都知道HashMap的时间复杂度为O(1)。其通过双向链表又解决了查找最少使用元素的问题，其时间复杂度仍然为O(1)。
 Guava Cache中的LRU算法：通过ConcurrentHashMap+双向链表实现的。
 ```
-在Guava Cache的LRU实现中，它的双向链表并不是全局的(即这个那个Guava Cache只有一个)。而是每个Segment(ConcurrentHashMap中的概念)中都有。其中一共涉及到三个Queue其中包括：AccessQueue和WriteQueue，以及RecentQueue。其中AccessQueue和WriteQueue就是双向链表；而RecentQueue才是真正的Queue，它就是CocurrentLinkedQueue。
+在Guava Cache的LRU实现中，它的双向链表并不是全局的(即这个那个Guava Cache只有一个)。而是每个Segment(ConcurrentHashMap中的概念)中都有。其中一共涉及到三个Queue其中包括：AccessQueue和WriteQueue，以及RecentQueue。其中AccessQueue和WriteQueue就是双向链表；而RecentQueue才是真正的Queue，它就是ConcurrentLinkedQueue。
 
 已经存在AccessQueue了，为什么还需要RecentQueue？
 AccessQueue是非线程安全，一定是在获取了segment锁之后才能移动数据到AccessQueue头部。如果没有RecentQueue，每次读访问数据时，都需要获取segment锁，显然效率非常低。
