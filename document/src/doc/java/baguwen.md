@@ -1,4 +1,8 @@
 数据结构
+ConcurrentHashMap 1.8
+锁力度就是HashEntry，基于synchronized+CAS+HashEntry+红黑树控制并发；
+链表长度大于8时，链表会转化成红黑树，加快效率；
+使用内置锁synchronized代替Reentrantlock；
 
 ![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png) 
 
@@ -13,13 +17,36 @@ jstack 分析线程状态和栈信息
 jmap （分析类实例和空间占用，dump堆内存到文件）
 建议：-Xms和-Xmx的值设置成相等，避免动态调整内存大小；新生代尽量设置大一些；根据gc日志，结合延迟目标，分配新生代大小和比例
 短命大对象和数组；大循环创建对象；大批量处理数据；强引用缓存集合；长时间占用对象。
-案例：
+### 案例：
 YGC每分钟10次，FGC每5分钟一次。
 配置内存2G，年轻代512M，Survivor默认8：1，采用CMS垃圾回收器。
 jstat命令发现Eden区容量小、增长快；Survivor区始终是100%；old区稳定增长；
 推断：Eden区过小，导致频繁YGC；YGC后存活对象大于Survivor区，直接进入old区；
 确认：增加YGC详细日志打印后，发现Survivor区age=1的对象占比非常高，存在过早晋升现象。
 尝试：调大Eden区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
+
+现象：应用规律性full gc，同时其他应用接口查询超时，几乎同时。
+分析：查看应用配置无明显问题。
+查看超时原因，redis查询超时。超时redis命令主要是hgetall和mget，但分析发现这些命令并不会持续超时，只在某个特定时间点全部超时。
+然后找DBA分析了redis慢查询命令，发现有一条hgetall命令耗时50s，value是所有车牌号和车架号的对应关系，超大key导致了redis超时。
+经过代码分析，发现应用在启动时，从redis加载所有数据到本地缓存，并且定时重新加载。
+假设：初步怀疑是大量缓存数据导致的full gc。
+验证：在业务低峰期，多次dump内存数据进行比对分析，发现hashmap.entry实例数稳定持续增加。
+移除本地缓存代码后，redis超时没有了，慢查询命令也没有了。dump内存发现hashmap.entry实例数保持稳定。
+原因：1.定时更新本地缓存，查询redis大对象阻塞了redis线程，导致其他查询超时；2.频繁更新本地缓存数据，导致老年代存在大量垃圾对象，引起full gc。
+
+现象：应用启动超时，线程假死。
+分析：1.应用没有报错日志，应用进程还在，没有退出。2.分析日志，发现发布过程中，应用在初始化spring bean的过程中假死，线程无响应。3.检查了变更代码，没有发现明显异常。
+jstack 查看线程状态，发现初始化bean的线程状态为blocked，然后分析线程堆栈是阻塞在MongoDB执行代码，进一步分析，发现该代码是在创建索引。
+假设：创建索引是个耗时动作，导致应用启动线程被阻塞，应用出现假死。
+验证：在线下人工后台创建索引，移除该部分代码。重新发布后，应用启动正常。
+原因：应届生在spring bean初始化时，进行了MongoDB collection创建索引操作，导致启动线程被阻塞。
+1. 实习生开发完成后离职，交接过程不规范。
+2. 测试环境数据量小，不容易发现问题。
+1. 实习生缺乏实际生产经验，对上线部署流程不熟悉，部门也缺乏相关指引和规范。
+2. 组内的代码review机制未生效，流于形式。
+
+
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
 https://www.jianshu.com/p/76959115d486
@@ -98,7 +125,7 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存
 guava cache
-异步加载
+自动加载：自定义加载器，如果数据不存在，则调用加载器加载数据。
 过期移除、容量移除、引用移除、显示移除
 异步刷新
 移除监听
