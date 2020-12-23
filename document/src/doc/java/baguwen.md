@@ -1,8 +1,4 @@
 数据结构
-ConcurrentHashMap 1.8
-锁力度就是HashEntry，基于synchronized+CAS+HashEntry+红黑树控制并发；
-链表长度大于8时，链表会转化成红黑树，加快效率；
-使用内置锁synchronized代替Reentrantlock；
 
 ![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png) 
 
@@ -19,11 +15,11 @@ jmap （分析类实例和空间占用，dump堆内存到文件）
 短命大对象和数组；大循环创建对象；大批量处理数据；强引用缓存集合；长时间占用对象。
 ### 案例：
 YGC每分钟10次，FGC每5分钟一次。
-配置内存2G，年轻代512M，Survivor默认8：1，采用CMS垃圾回收器。
+配置内存2G，–XX:NewRatio默认1：2 ，年轻代682M，SurvivorRatio默认8：1，Survivor 68m。采用CMS垃圾回收器。
 jstat命令发现Eden区容量小、增长快；Survivor区始终是100%；old区稳定增长；
 推断：Eden区过小，导致频繁YGC；YGC后存活对象大于Survivor区，直接进入old区；
 确认：增加YGC详细日志打印后，发现Survivor区age=1的对象占比非常高，存在过早晋升现象。
-尝试：调大Eden区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
+尝试：调大年轻代区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
 
 现象：应用规律性full gc，同时其他应用接口查询超时，几乎同时。
 分析：查看应用配置无明显问题。
@@ -125,7 +121,7 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存
 guava cache
-自动加载：自定义加载器，如果数据不存在，则调用加载器加载数据。
+异步加载
 过期移除、容量移除、引用移除、显示移除
 异步刷新
 移除监听
@@ -359,6 +355,15 @@ dubbo rpc调用、zookeeper服务发现（临时节点失效后自动删除）�
 Kafka、codis、shardingjdbc、elastic-job
 cap理论
 
+
+
+设计思想：通过巧妙的设计提高效率，避免资源的浪费
+预操作：对于耗时要求极高的业务，可以在登录时进行预加载操作。以空间换时间。
+实时操作：常规操作，实时查询，实时加载，定时过期。
+延迟操作：对于定时删除和失效之类的操作，增加失效时间字段，通过时间判断数据失效。延后统一批量删除。
+
+延迟操作代替定时任务实时操作：目前定时刷新等操作是通过后台定时任务执行的，单独线程消耗资源；
+令牌桶：通过记录下次可用时间代替保存令牌，来节省定时添加令牌的操作。
 
 多线程https://blog.csdn.net/tanmomo/article/details/99671622
 锁https://www.cnblogs.com/lu51211314/p/10237154.html
