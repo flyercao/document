@@ -15,11 +15,11 @@ jmap （分析类实例和空间占用，dump堆内存到文件）
 短命大对象和数组；大循环创建对象；大批量处理数据；强引用缓存集合；长时间占用对象。
 案例：
 YGC每分钟10次，FGC每5分钟一次。
-配置内存2G，年轻代512M，Survivor默认8：1，采用CMS垃圾回收器。
+配置内存2G，–XX:NewRatio默认1：2 ，年轻代682M，SurvivorRatio默认8：1，Survivor 68m。采用CMS垃圾回收器。
 jstat命令发现Eden区容量小、增长快；Survivor区始终是100%；old区稳定增长；
 推断：Eden区过小，导致频繁YGC；YGC后存活对象大于Survivor区，直接进入old区；
 确认：增加YGC详细日志打印后，发现Survivor区age=1的对象占比非常高，存在过早晋升现象。
-尝试：调大Eden区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
+尝试：调大年轻代区1G，调小Survivor ratio为4  ，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
 https://www.jianshu.com/p/76959115d486
