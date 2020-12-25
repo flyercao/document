@@ -42,6 +42,10 @@ jstack 查看线程状态，发现初始化bean的线程状态为blocked，然�
 1. 实习生缺乏实际生产经验，对上线部署流程不熟悉，部门也缺乏相关指引和规范。
 2. 组内的代码review机制未生效，流于形式。
 
+元旦活动性能问题优化
+目标：元旦跨年期间，吞吐量200 -> 2000TPS
+
+
 
 # JVM内存
 https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
@@ -278,15 +282,18 @@ dubbo：高性能开源RPC框架，包含容错、负载均衡和服务治理等
 第十层：serialize层，数据序列化层，网络传输需要
 调用流程：https://baijiahao.baidu.com/s?id=1645744285641737459&wfr=spider&for=pc
 
-```
-client一个线程调用远程接口，生成一个唯一的ID（比如一段随机字符串，UUID等），Dubbo是使用AtomicLong从0开始累计数字的
-将打包的方法调用信息（如调用的接口名称，方法名称，参数值列表等），和处理结果的回调对象callback，全部封装在一起，组成一个对象object
-向专门存放调用信息的全局ConcurrentHashMap里面put(ID, object)
-将ID和打包的方法调用信息封装成一对象connRequest，使用IoSession.write(connRequest)异步发送出去
-当前线程再使用callback的get()方法试图获取远程返回的结果，在get()内部，则使用synchronized获取回调对象callback的锁， 再先检测是否已经获取到结果，如果没有，然后调用callback的wait()方法，释放callback上的锁，让当前线程处于等待状态。
-服务端接收到请求并处理后，将结果（此结果中包含了前面的ID，即回传）发送给客户端，客户端socket连接上专门监听消息的线程收到消息，分析结果，取到ID，再从前面的ConcurrentHashMap里面get(ID)，从而找到callback，将方法调用结果设置到callback对象里。
-监听线程接着使用synchronized获取回调对象callback的锁（因为前面调用过wait()，那个线程已释放callback的锁了），再notifyAll()，唤醒前面处于等待状态的线程继续执行（callback的get()方法继续执行就能拿到调用结果了），至此，整个过程结束。
-```
+解析配置
+1. dubbo.xsd文件定义dubbo标签。
+2. 通过DubboNamespaceHandler，注册标签解析器，做一些特殊格式处理。
+3. ServiceBean(服务提供者)与ReferenceBean(服务消费者)比较特殊，实现了Spring与Bean生命周期相关的接口。
+4. 在afterPropertiesSet方法最后发布服务或获取服务。
+
+发布服务ServiceConfig#doExport
+1. 检查application、module、registries、protocols配置。
+2. delay=-1,应用启动完之后再发布；delay>0，则交由ScheduledExecutorService延迟发布。如果不延迟启动，则doExport。
+3. 填充属性默认值。顺序是系统参数 -> dubbo.properties ->ServiceBean
+4. 遍历所有注册中心、所有协议，构建所有URL对象。method、generic、injvm、IP和端口
+5. 根据配置的注册协议找到注册实现类ZookeeperRegistry，
 原理：
 参数优化
 
