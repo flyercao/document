@@ -21,15 +21,15 @@ jstat命令发现Eden区容量小、增长快；Survivor区始终是100%；old�
 确认：增加YGC详细日志打印后，发现Survivor区age=1的对象占比非常高，存在过早晋升现象。
 尝试：调大年轻代区1G，调小Survivor ratio为4，线上灰度发现效果最好，YGC几分钟一次，FGC每天一两次。
 
-现象：离线应用规律性full gc，同时实时应用接口查询超时，几乎同时。
-分析：查看应用配置无明显问题。
+现象：离线应用发布时接口超时，规律性full gc，同时实时应用接口查询超时，几乎同时。
+分析：查看应用配置无明显问题；
 查看超时原因，redis查询超时。超时redis命令主要是hgetall和mget，但分析发现这些命令并不会持续超时，只在某个特定时间点全部超时。
-然后找DBA分析了redis慢查询命令，发现有一条hgetall命令耗时50s，value是所有车牌号和车架号的对应关系，超大key导致了redis超时。
+怀疑是redis服务端的问题：然后找DBA分析了redis慢查询命令，发现有一条hgetall命令耗时10s，value是所有车牌号和车架号的对应关系，超大key导致了redis超时。
 经过代码分析，发现应用在启动时，从redis加载所有数据到本地缓存，并且定时重新加载。
 假设：初步怀疑是大量缓存数据导致的full gc。
-验证：在业务低峰期，多次dump内存数据进行比对分析，发现hashmap.entry实例数稳定持续增加。
+验证：在业务低峰期，jstat -gcutil  发现old区一直在增长；多次dump内存数据进行比对分析，发现hashmap.entry实例数稳定持续增加。
 移除本地缓存代码后，redis超时没有了，慢查询命令也没有了。dump内存发现hashmap.entry实例数保持稳定。
-原因：1.定时更新本地缓存，查询redis大对象阻塞了redis线程，导致其他查询超时；2.频繁更新本地缓存数据，导致老年代存在大量垃圾对象，引起full gc。
+原因：1.由于车辆换牌等，定时本地缓存更新，查询redis大对象阻塞了redis线程，导致其他查询超时；2.频繁更新本地缓存数据，导致老年代存在大量垃圾对象，引起full gc。
 
 现象：应用启动超时，线程假死。
 分析：1.应用没有报错日志，应用进程还在，没有退出。2.分析日志，发现发布过程中，应用在初始化spring bean的过程中假死，线程无响应。3.检查了变更代码，没有发现明显异常。
@@ -42,8 +42,20 @@ jstack 查看线程状态，发现初始化bean的线程状态为blocked，然�
 1. 实习生缺乏实际生产经验，对上线部署流程不熟悉，部门也缺乏相关指引和规范。
 2. 组内的代码review机制未生效，流于形式。
 
-元旦活动性能问题优化
-目标：元旦跨年期间，吞吐量200 -> 2000TPS
+元旦活动应用性能优化
+现状：单机压测qps在200不到，rt已经超过200ms
+目标：单机qps到500，rt小于200ms。
+排查：
+现象：0.机器是4核8g；1.load很高到15；2.cpu100%；3.网络状态正常；
+1. top -H -p pid 命令和  jstack命令，分析占CPU高的线程；发现是apache jexl在解析和aqs执行脚本（解释型脚本解析器，非常占CPU）；升级机器为8核16g机器，重新压测
+qps到400；CPU80%；load10；每秒4次YGC，30ms，没有full gc
+2. 2g内存，新生代680M；jstate -gcutil 分析内存回收情况，新生代快速占满回收，没有向老年代迁移；扩大新生代到1g；
+qps到500，load不变，rt下降到180ms，YGC评率降低每秒一次，20ms；ioutil升高。
+3. 还是top和jstack命令，发现waiting业务线程，堆栈出现大量logback调用，结合arths工具，发现耗时几十ms。线程阻塞在ReentrantLock.lock方法。（logback已经配置了异步appender），分析阻塞原因。发现有个neverBlock属性，默认值为false。调用blockingQueue.put阻塞方法追加日志。如果为true，则通过blockingQueue.offer非阻塞方法追加日志。于是添加了neverBlock=true的配置。
+qps到800，rt200ms以内。CPU90%；load16；
+4. 还是top和jstack命令，发现大量出现JSON.toJSONString方法，结合arths工具，发现耗时0.1ms。调整为对象toString方法。
+5. 同样发现了策略命中数量统计的方法耗时5ms，频繁多次写codis。优化成 disruptor异步批量写codis。
+最终，qps在1000，内部rt在7ms，外部rt降低到10ms，CPU95%。
 
 
 
@@ -294,6 +306,82 @@ dubbo：高性能开源RPC框架，包含容错、负载均衡和服务治理等
 3. 填充属性默认值。顺序是系统参数 -> dubbo.properties ->ServiceBean
 4. 遍历所有注册中心、所有协议，构建所有URL对象。method、generic、injvm、IP和端口
 5. 根据配置的注册协议找到注册实现类ZookeeperRegistry，
+6. 创建Netty Server时，传入1、解码器；2、编码器；3、业务类NettyHandler。服务端收到网络读事件后，将二进制流进入解码器，解析为RPC请求，然后交给NettyServer去处理。
+7. NettyServer根据请求协议和策略，决定是转给业务线程还是IO线程自己处理。
+
+zookeeper服务注册于发现
+1. 在 dubbo/目录下创建服务目录，以服务名命名。dubbo/serviceName目录下分别有consumers、providers、configurators和routers目录。服务提供者和消费者分别往目录下写入URL信息。
+2. 服务提供者在暴露服务时，会在${service interface}/providers目录下添加一个临时节点，服务提供者需要与注册中心保持长连接，连接断掉会话信息失效后，注册中心会认为该服务提供者不可用（提供者节点会被删除）。
+3. 消费者在启动时，首先也会向注册中心注册自己，具体在${interface interface}/consumers目录下创建一个临时节点
+2. 消费者监听上述目录的增删改事件。解析事件通知，重构服务调用器(Invoker)。并且将信息写入本地缓存和文件缓存
+
+动态配置
+dubbo管理员可以通过dubbo-admin管理系统在线上增加动态配置来修改dubbo服务提供者的参数。
+动态配置保存在注册中心的configurators目录，通过更新机制通知消费者。
+override覆盖OR absent追加、特定IP、服务名、持久生效、指定应用、超时时间等
+
+动态路由
+dubbo管理员可以通过dubbo-admin管理系统在线上增加动态路由来调整服务的路由规则。
+动态配置保存在注册中心的routers目录，通过更新机制通知消费者。
+**条件路由规则** =>之前的为消费者匹配条件， =>之后为新的路由规则。
+**脚本路由规则**通过脚本定义路由规则。支持 JDK 脚本引擎的所有脚本，javascript, jruby, groovy
+**标签路由规则**当服务提供者选择装配标签路由(TagRouter)且消费方在请求attachment添加tag后，每次 dubbo 调用能够根据请求携带的 tag 标签智能地选择对应 tag 的服务提供者进行调用。
+
+负载均衡
+服务调用方对服务提供者的选择是通过负载均衡算法实现，random、roundrobin和leastactive都提供了权重机制。并且通过权重机制，在服务提供者预热未完成时，实现了接口的客户端预热
+random随机：生成(0-totalWeight)范围内随机数offset，如果减去(offset=（offset - provider.weight） < 0),则该invoker命中；如果权重相同，则直接随机即可。
+roundrobin轮训：生成递增的随机数offset，纵向遍历提供者（外层循环maxWeight次，内层循环invokerSize次，每次offset-1，当前的提供者weight-1，忽略weight=0的，当offset=0时，该提供者就是服务提供者）。
+leastactive最少活跃：ActiveLimitFilter负责在调用服务前+1，调用完成后-1来统计服务的活跃数，活跃数小说明处理快。首先遍历所有服务提供方，统计最小活跃数数组和对应的权重；如果只有一个，则返回；否则执行权重随机算法；
+consistenthash一致性hash：虚拟环境分配2的32次方个节点，每个hash值都能对应一个节点。为了避免分配倾斜，每个服务提供方分配160个虚拟节点，对应环上160个节点；把请求进过hash值计算，对应到环上的节点，然后顺时针方向寻找遇到的第一个虚节点，让该虚拟节点对应的服务方提供服务。
+自定义实现：通过SPI机制，继承AbstractLoadBalance类，实现doSelect方法。
+
+集群容错
+如果某次调用服务方失败，会根据集群容错机制决定是否重试。根据待选列表、已选列表，如果设置sticky机制（粘性），且调用过程无错误，后续会直接选择该提供者，默认不开启。
+Failover：根据retries属性设置次数，失败后自动选择其他服务提供者进行重试，默认重试两次。默认。
+Available：选择集群第一个可用的服务提供者。相当于服务的主备，但同时只有一个服务提供者承载流量，并没有使用集群的负载均衡机制。
+Failfast：快速失败，不会进行重试。适合不支持幂等行接口。
+Broadcast：广播调用，将调用所有服务提供者，一个服务调用者失败，并不会熔断，并且一个服务提供者调用失败，整个调用认为失败。适合刷新缓存等。
+Failback：调用失败后，返回成功，但会在后台定时任务重试，重试次数（反复）。通常用于消息通知，但消费者重启后，重试任务丢失。
+Failsafe：调用失败，返回成功。调用审计测试等，日志类服务接口。
+Forking：并行调用多个服务提供者，当一个服务提供者返回成功，则返回成功。实时性要求比较高的场景，但浪费服务器资源，通常可以通过forks参数设置并发调用度。
+
+网络通信
+
+序列化
+Dubbo支持多种序列化协议，java、compactedjava、nativejava、fastjson、fst、hessian2、kryo，其中默认hessian2。
+Serialization(序列化策略)、DataInput(反序列化，二进制----》对象)、DataOutput（序列化，对象----》二进制流）
+
+dubbo协议
+
+消费者调用流程
+
+提供者处理流程
+
+Filter机制
+
+
+异步与回调
+
+限流
+
+降级
+
+泛化调用
+
+SPI
+
+accessLog
+
+监控中心
+
+设计模式
+
+灰度发布方案
+
+dubbo与Http
+
+dubbo与spring cloud
+
 原理：
 参数优化
 
@@ -358,7 +446,7 @@ https://www.cnblogs.com/dailyprogrammer/p/12272760.html
 问题：问题定位、稳定性、互相依赖
 
 Prometheus指标采集、Grafana配置监控报警、pinpoint全链路、ELK日志搜索
-dubbo rpc调用、zookeeper服务发现（临时节点失效后自动删除）、Diamond配置中心、接口熔断（Hystrix），功能降级，限流（ratelimter）
+dubbo rpc调用、zookeeper服务发现（临时节点失效后自动删除）、Diamond配置中心、接口熔断降级限流（Hystrix），功能降级
 Kafka、codis、shardingjdbc、elastic-job
 cap理论
 
