@@ -345,22 +345,43 @@ Failback：调用失败后，返回成功，但会在后台定时任务重试，
 Failsafe：调用失败，返回成功。调用审计测试等，日志类服务接口。
 Forking：并行调用多个服务提供者，当一个服务提供者返回成功，则返回成功。实时性要求比较高的场景，但浪费服务器资源，通常可以通过forks参数设置并发调用度。
 
-网络通信
+网络通信NIO
 
-序列化
+序列化MonitorFilter
 Dubbo支持多种序列化协议，java、compactedjava、nativejava、fastjson、fst、hessian2、kryo，其中默认hessian2。
 Serialization(序列化策略)、DataInput(反序列化，二进制----》对象)、DataOutput（序列化，对象----》二进制流）
 
 dubbo协议
 
-消费者调用流程
+消费者调用流程RpcStatus
 
 提供者处理流程
 
 Filter机制
+在真正的请求前后做一些相应的通用的处理，权限的验证，日志的打印。在服务暴露和服务发现和订阅的时候，会组装好filter的调用链路。
+可以通过实现Filter接口的invoke方法来自定义实现。指定group为provider、consumer或二者，order调用顺序，value过滤条件。
+ConsumerContextFilter设置上下文、traceId等；
+MonitorFilter：统计调用量等信息，上报到monitor；收集并发调用数、当前时间、调用耗时、异常等数据。
+FutureFilter：执行事件通知，调用前（oninvoke）、同步调用后/异步调用完成后（onreturn/onthrow）的方法实现。
+ActiveLimitFilte：客户端限流。控制每个consumer调用指定方法的最大并发数，主要通过actives参数进行配置，在每次调用的时候活跃数+1，调用结束活跃数-1。最少活跃数负载均衡也有关系。
+ExecuteLimitFilter服务端限流。老版本使用Semaphore信号量来控制并发数，2.7之后使用AtomLong来计数。
+ExceptionFilter：全局异常处理。
 
+异步调用与事件通知
+异步调用：客户端基于NIO的非阻塞实现并行调用，客户端不需要启动多线程即可并行调用多个服务，线程开销小。sent可以设置是否等待消息发出；return可以设置是否创建future返回结果。DubboInvoke实现调用方式
+oneWay：只管调用，不管结果。根据sent参数决定是等待网络数据发出还是只写入缓存区。
+异步：不管是同步还是异步，都是Future模式进行调用。异步模式则直接返回Future Response。用户需要时才调用get方法。
+同步：同步模式下，则直接调用get方法，等待返回结果。
+bug：异步调用模式下，dubbo异步调用具有传递性，不过只会传递一次。ServiceA异步调ServiceB，ServiceB再同步调ServiceC，此时ServiceC会当异步调用，返回结果为null。
 
-异步与回调
+事件通知：客户端在调用之前或之后，会触发oninvoke、onreturn、onthrow三个事件，可以配置事件发生时，回调的类和方法。根据是否同步和是否回调组合4种方式。异步回调、同步回调、异步无回调、同步无回调。
+通过FutureFilter来实现的异步回调机制。FutureFilter在实际调用前同步处罚oninvoke方法，通过反射执行方法；在实际调用后，同步或者异步调用onreturn或onthrow方法。
+
+异步执行
+1. 定义接口返回结果为CompletableFuture类型，使业务执行已从 Dubbo 线程切换到业务线程，避免了对 Dubbo 线程池的阻塞。
+2. 通过AsyncContext手动传递上下文，异步执行逻辑，再写Response。
+结合服务端异步执行AsyncContext+客户端事件通知实现高性能网关。
+
 
 限流
 
@@ -373,6 +394,9 @@ SPI
 accessLog
 
 监控中心
+MonitorFilter将调用数据传给监控中心（默认DubboMonitor），DubboMonitor先在内存中进行数据统计。
+DubboMonitor通过后台定时任务将统计数据RPC发送到独立的监控中心。
+监控中心把数据保存在本地文件。
 
 设计模式
 
