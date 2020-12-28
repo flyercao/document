@@ -84,12 +84,27 @@ Serialization(序列化策略)、DataInput(反序列化，二进制----》对象
 dubbo协议
 
 消费者调用流程
+ReferenceBean：配置和注解的解析；依赖Spring提供的标签解析器和注解解析器进行解析；
+ReferenceConfig：init方法实例创建，进行服务接口、方法等配置解析和检查并缓存在本地内存；
+Invoker：Invoker 是 Dubbo 的核心模型，代表一个可执行体。根据配置项生成url，并注册到zk注册中心，url 构建 Invoker，Cluster 合并多个 Invoker，调用 ProxyFactory 生成代理类。
+代理类代理实现远程服务接口，并提供MockCluster、集群容错、负载均衡等Filter链，然后通过Exchanger将实时调用封装为请求响应模式，同步转异步Future；
+在经过编码和序列化，封装request head和body，把request通过netty发送到网络。
+服务消费方在收到响应数据后，对响应数据进行解码，得到 Response 对象。与服务端类似
+与服务端类似，对象派发到dubbo线程池中。
+dubbo线程根据packageId找到对应的Future，写入response数据，通过reentrantlock唤醒发送请求的dubbo线程。
+
 https://blog.csdn.net/weixin_33828101/article/details/88811762?utm_medium=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-1.control&depth_1-utm_source=distribute.pc_relevant.none-task-blog-BlogCommendFromMachineLearnPai2-1.control
 https://segmentfault.com/a/1190000017823251
 http://www.tianxiaobo.com/
 
 提供者处理流程
 https://segmentfault.com/a/1190000019420778?utm_source=tag-newest
+netty收到请求消息，IO线程首先对消息进行解码，解析的到Request对象。解码可在IO线程或Dubbo线程处理，可以配置。
+请求派发。IO线程将请求派发给dubbo线程，默认是dispatcher all策略，全部消息都由dubbo线程处理。
+Exchange将请求request转换为实时调用。调用Filter链。
+Invoker 是由JavassistProxyFactory创建，实际调用代理类的invokeMethod方法，最终调用实际提供服务的service方法。
+调用结果封装到 Response，进过编码发送给调用方。
+
 
 Filter机制
 在真正的请求前后做一些相应的通用的处理，权限的验证，日志的打印。在服务暴露和服务发现和订阅的时候，会组装好filter的调用链路。
@@ -138,7 +153,7 @@ GenericFilter负责具体实现。1.将Generic.$invoke接口参数反射为java�
 
 
 accessLog
-访问日志通过AccessLogFilter实现。Constants.$INVOKE
+访问日志通过AccessLogFilter实现。
 配置项accesslog="true" 表示使用log4j等日志组件，打印info级别调用日志；
 配置项accesslog="/logs/accesslog.log" 则表示dubbo异步写入日志文件。 
 默认不建议开启，对性能有一定影响。排查问题时，可通过dubbo admin动态配置开启。
@@ -148,8 +163,6 @@ MonitorFilter将调用数据传给监控中心（默认DubboMonitor），DubboMo
 DubboMonitor通过后台定时任务将统计数据RPC发送到独立的监控中心。
 监控中心把数据保存在本地文件。
 
-设计模式
-
 灰度发布方案
 希望根据请求，某些请求走新版本服务器，某些请求走旧版本服务器，其本质就是路由机制，即通过一定的条件来缩小服务的服务提供者列表，通过dubbo router实现。
 通过dubbo admin界面，配置路由脚本，根据请求参数，返回目标服务提供者列表。
@@ -158,3 +171,13 @@ SPI
 SPI是JDK内置的一种服务提供发现机制，通过插件配置的形式给应用添加功能。dubbo框架通过SPI机制实现内核与扩展点的动态关联。SPI 的缺点。1.JDK 标准的 SPI 会一次性加载实例化扩展点的所有实现，浪费资源；2.如果扩展点加载失败，会导致调用方报错；
 Dubbo SPI进行了优化；提供自适应扩展、指定名称扩展和激活扩展。
 https://segmentfault.com/a/1190000024443652?utm_source=sf-related
+
+
+IO多路复用
+IO多路复用模型将等待数据和读取数据分开，由单独一个线程同时等待多个socket数据，另一个线程池执行数据同步读取操作，将数据拷贝到用户空间。select、poll、epoll等实现。
+netty有boss线程和work线程。
+
+零拷贝
+内核（kernel）直接将数据从磁盘文件拷贝到套接字（Socket），而无须通过应用程序内存。减少内存拷贝，减少内核与用户模式的CPU上下文切换。
+传统数据拷贝：1.从磁盘拷贝到内核缓冲区。2.拷贝到应用程序；3.拷贝到内核缓冲区；4.写入网络缓冲区
+零拷贝：1.从磁盘拷贝到内核缓冲区。2.操作系统进行内存映射，应用程序可以直接修改内核缓冲区数据。3.内核缓冲区数据拷贝到网络缓冲区。
