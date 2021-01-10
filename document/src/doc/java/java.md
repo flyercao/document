@@ -1,21 +1,50 @@
+[TOC]
 
-![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png) 
+## JVM内存
+### 堆Heap
+保存对象、数组、常量池、静态变量  
+年轻代、老年代。而年轻代又可分为Eden区、From Survivor、To Survivor三个区域，默认8:1:1。  
+垃圾回收主要针对的就是堆空间。
+### 方法区
+方法区主要是存储类的元数据的，如虚拟机加载的类信息、编译后的代码等。JDK8使用元空间MetaSpace实现，使用的系统内存。
+### 虚拟机栈
+虚拟机栈是线程私有的，它的生命周期与线程相同。
+存储局部变量表、操作栈、动态链接、方法出口等信息。
+### 本地方法栈
+专门为Native方法来实现
+### 程序计数器
+当前线程所执行的字节码的行号指示器
+### 直接内存
+为避免在Java堆和Native堆中来回复制数据，在虚拟机之外分配的内存，受限于机器内存。
 
-
-# JVM内存
-https://imgconvert.csdnimg.cn/aHR0cDovL3d3MS5zaW5haW1nLmNuL2xhcmdlL2E1ZmE0YThkZ3kxZ2EyNDExaWZjcWoyMGswMGx6bXo1LmpwZw?x-oss-process=image/format,png
-https://www.jianshu.com/p/76959115d486
 ## 垃圾回收器
-ParNew收集器 -XX:+UseParNewGC 标记复制算法
-CMS（Concurrent Mark Sweep） 标记清理算法，并发收集、低停顿；占用CPU，产生大量内存碎片和浮动垃圾
-初始标记（STW）、并发标记、重新标记（STW）、并发清除
-G1收集器：有分代，没有分区。老年代和新生代都是由多个大小固定的Region组成。会有短暂STW。
-初始标记（STW）、并发标记、最终标记（STW）、筛选回收
-1. 标记整理（复制）算法，不产生内存碎片
-2. 可预测停顿，可控制消耗在gc上时间小于n毫秒
+ParNew收集器 -XX:+UseParNewGC 用于新生代，标记复制算法
+### CMS（Concurrent Mark Sweep） 
+![](https://img2018.cnblogs.com/blog/1326194/201810/1326194-20181017221500926-2071899824.png)
+老年代回收算法，最短回收停顿时间为目标。标记清理算法，并发收集、低停顿；  
+占用CPU;产生大量内存碎片;浮动垃圾导致另一次full gc   
+初始标记（STW）、并发标记、重新标记（STW）、并发清除  
+```
+-Xms堆空间初始值；-Xmx对空间最大值；-Xmn年轻代大小；-XX:SurvivorRation年轻代Eden区与Survivor区的比例；-XX:PretenureSizeThreshold大对象阈值；
+-XX:+UseConcMarkSweepGC老年代使用CMS回收算法；-XX:+UseCMSCompactAtFullCollection Fullgc后对内存进行压缩；
+-XX:+CMSInitiatingOccupancyFraction=70老年代进行gc时空间使用率；-XX:+MaxTenuringThreshold=15对象进入老年代的年龄。
+```
+### G1收集器
+![](https://img2020.cnblogs.com/blog/980882/202004/980882-20200423001534652-41920210.png)
+设计原则就是简单可行的性能调优。-XX:MaxGCPauseMillis=200  。初始标记-并发标记-重新标记-复制清除
+**并行与并发**：G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU来缩短 Stop-The-World 停顿的时间    
+**分代收集**：独立管理整个GC堆,通过young gc和mix gc分别回收新生代和老年代。  
+**空间整合**：基于 “标记-整理（复制）” 算法实现的收集器，不会产生内存空间碎片，利于分配大对象。  
+**可预测的停顿**：这是G1相对于CMS的另外一大优势，还能建立可预测的停顿时间模型。G1跟踪各个Region里面的垃圾堆积的价值大小，在后台维护一个优先列表，每次根据允许的收集时间，优先回收价值最大的 Region。  
+**Humongous区域**：用来存放超过了分区容量50%的大对象。如果一个H区装不下巨型对象，那么会寻找连续的H分区来存储，甚至提前启动Full gc。  
+**Remembered Set**：每个Region都有一个与之对应的RememberedSet ，各个 Region 上记录自家的对象被外面对象引用的情况。当进行内存回收时，在GC根节点的枚举范围中加入RememberedSet 即可保证不对全堆扫描也不会有遗漏
+```
+-XX:MaxGCPauseMillis=200最大停顿时间；-XX:G1HeapRegionSize=n region大小；-XX:ParallelGCThreads=cpu STW 工作线程数的值；
+-XX:ConcGCThreads=cpu/4 并行标记的线程数；-XX:InitiatingHeapOccupancyPercent=45触发标记周期的 Java 堆占用率阈值
+```
+某些情况下会退化成full gc，这时候单线程来完成GC。（晋升失败，巨型对象分配失败）
 
-
-类加载机制
+## 类加载
 类初始化时机：只有当对类的主动使用的时候才会导致类的初始化。类加载的过程包括加载、验证、准备、解析、初始化五个阶段
 加载：查找并加载类的二进制数据，转化为方法区的运行时数据结构，在Java堆中生成一个代表这个类的java.lang.Class对象。
 验证：为了确保Class文件的字节流中包含的信息符合当前虚拟机的要求，不会危害虚拟机自身的安全。
@@ -37,28 +66,76 @@ G1收集器：有分代，没有分区。老年代和新生代都是由多个大
 SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放在classpath路径下，Bootstrap类加载器无法直接加载。
 所以需要线程上下文类加载器（contextClassLoader）。初始线程的上下文类加载器是系统类加载器（AppClassLoader）,在线程中运行的代码可以通过此类加载器来加载类和资源。
 
-
-
+### SPI
+Java提供的一套用来被第三方实现或者扩展的接口，用来启用框架扩展和替换组件。 SPI的作用就是为这些被扩展的API寻找服务实现。
+1. 通过当前线程类加载器和class对象，构造ServiceLoader；并且实例化一个LazyIterator；
+2. LazyIterator的作用是扫描所有引用的jar包里/META-INF/services/目录下配置文件，并parse配置中的所有service名字。
+3. 将配置的类通过反射序列化，加载到缓存中，并返回。
+**弊端**  
+```
+只能遍历所有的实现，并全部实例化。
+扩展如果依赖其他的扩展，做不到自动注入和装配。
+由于配置没有命名，如果有多个扩展实现，无法指定引用那种实现。
+```
+**Dubbo SPI**
+整体原理与SPI相似，自己实现了一套机制。解析约定的路径下配置文件，找到扩展实现类，再通过反射实例化到缓存。
+@SPI扩展点：注解作用于扩展点的接口上，表明该接口是一个扩展点。  全类名就是配置文件名。  
+@Adaptive自适应实例：@Adaptive 注解添加在扩展点的方法上，表示该方法的实现是被代理的，在运行时动态根据url配置获取相应的实现。
+@Adaptive 注解添加在类上，表示该类是一个自适应扩展点。可以根据请求的参数，即 URL 得到具体要调用的实现类名。  
+Activate自动激活扩展点：提供了一些配置来允许我们配置加载条件，比如 group 过滤，比如 key 过滤。对于一个类会加载多个扩展点的实现，通过自动激活扩展点进行动态加载，从而简化配置。
+实现了dubbo IOC和AOP机制
 ## 多线程
-BLOCKED：一个线程因为等待对象或类的监视器锁被阻塞产生的状态。只有执行synchronize关键字没有获取到锁才会进入。进入同步代码块执行object.wait方法进入的是**WAITING**状态。
-WAITING：线程通过notify,join,LockSupport.park方式进入wating状态，一直等待其他线程唤醒(notify或notifyAll)才有机会进入RUNNABLE状态。sleep、wait和lock方式都会使线程进入WAITING状态。
-interrupted是线程的一个标志位。其他线程可以调用该线程的interrupt()方法对其进行中断操作，同时该线程可以调用isInterrupted（）来感知其他线程对其自身的中断操作，从而做出响应。
-join是线程间协作的一种方式。如果一个线程实例A执行了threadB.join(),其含义是：当前线程A会等待threadB线程终止后threadA才会继续执行。
-sleep是让当前线程进入WAITING状态。如果当前线程获得了锁，sleep方法并不会释放锁。sleep其实跟锁没有关系。
-yield当前线程让出CPU，进入RUNNABLE状态。但是，需要注意的是，让出的CPU并不是代表当前线程不再运行了，如果在下一次竞争中，又获得了CPU时间片当前线程依然会继续运行。另外，让出的时间片只会分配给当前线程相同优先级的线程
-JMM
+### 线程状态
+![github](https://upload-images.jianshu.io/upload_images/2615789-1345e368181ad779.png) 
+
+BLOCKED：一个线程因为等待对象或类的监视器锁被阻塞产生的状态。只有执行synchronize关键字没有获取到锁才会进入。进入同步代码块执行object.wait方法进入的是**WAITING**状态。  
+WAITING：线程通过notify,join,LockSupport.park方式进入wating状态，一直等待其他线程唤醒(notify或notifyAll)才有机会进入RUNNABLE状态。sleep、wait和lock方式都会使线程进入WAITING状态。  
+
+1. interrupted是线程的一个标志位。其他线程可以调用该线程的interrupt()方法对其进行中断操作，同时该线程可以调用isInterrupted（）来感知其他线程对其自身的中断操作，从而做出响应。
+1. join是线程间协作的一种方式。如果一个线程实例A执行了threadB.join(),其含义是：当前线程A会等待threadB线程终止后threadA才会继续执行。
+1. sleep是让当前线程进入WAITING状态。如果当前线程获得了锁，sleep方法并不会释放锁。sleep其实跟锁没有关系。
+1. yield当前线程让出CPU，进入RUNNABLE状态。但是，需要注意的是，让出的CPU并不是代表当前线程不再运行了，如果在下一次竞争中，又获得了CPU时间片当前线程依然会继续运行。另外，让出的时间片只会分配给当前线程相同优先级的线程
+### JMM
 通信模式：java内存模型是共享内存的并发模型，线程之间主要通过读-写共享变量来完成隐式通信。
 共享变量：实例域，静态域和数组元素都是放在堆内存中，堆内存是所有线程都可访问，是共享的。
 JMM抽象结构模型：CPU工作内存与主内存之间会有多级缓存，从内存加载到cpu工作内存的变量会暂存在缓存。JMM抽象层次定义了一个线程对共享变量的写入何时对其他线程是可见的，何时将工作内存的变量副本同步到主内存。MESI缓存一致性协议，它通过定义一个状态机来保证缓存的一致性。
 重排序：为了提高性能，编译器和处理器常常会对指令进行重排序。针对编译器重排序，JMM的编译器重排序规则会禁止一些特定类型的编译器重排序；针对处理器重排序，编译器在生成指令序列的时候会通过插入内存屏障指令来禁止某些特殊的处理器重排序。
 happens-before原则：JMM可以通过happens-before关系向程序员提供跨线程的内存可见性保证，同时对编译器和处理器重排序进行约束。（如果A线程的写操作a与B线程的读操作b之间存在happens-before关系，尽管a操作和b操作在不同的线程中执行，但JMM向程序员保证a操作将对b操作可见）
-线程安全
-在多线程开发时需要从原子性，有序性，可见性三个方面进行考虑。
+### 线程安全
+原子性：互斥访问，同一时刻只能有一个线程对数据进行操作（CAS、synchronized）
+可见性：一个线程对主内存的修改可以及时地被其他线程看到，（synchronized,volatile）
+有序性：一个线程的指令执行顺序，不影响其他线程观察到的结果（volatile）
+AtomicStampedReference通过版本号避免CAS ABA问题。
+### volatile
+可见性：通过MESI缓存一致性协议保证A线程对变量i值做了变动之后，会立即刷回到主内存中，而其它线程CPU缓存到该变量的值也作废，强迫重新从主内存中读取该变量的值。
+有序性：volatile有序性是通过内存屏障实现的。JVM和CPU都会对指令做重排优化，所以在指令间插入一个屏障点，就告诉JVM和CPU，不能进行重排优化。  
+**使用场景** 对变量的写操作不依赖于当前值或只是赋值；volatile变量的单次读/写操作可以保证原子性；volatile变量没有其他依赖时；  
 
-### 锁
 ## 锁
-synchronized
-偏向锁、轻量级锁、重量级锁
+### synchronized
+任意线程对Object的访问，首先要获得Object的监视器，如果获取失败，线程状态变为BLOCKED。当Object的监视器占有者释放后，在同步队列中得线程就会有机会重新获取该监视器。  
+获取监视器后调用wait()方法，线程释放锁，变成waiting状态，进入等待队列。直到被其他线程调用object的notify()或notifyAll()，才有机会重新获取锁对象。  
+是一种重量级锁，会涉及到操作系统状态的切换影响效率  
+#### 偏向锁（无竞争）
+在对象头Mark Word  cas方式写入当前线程ID，成功则获取锁成功，下次申请锁只需要比较是否当前线程ID，只有一次cas开销。失败则锁升级为轻量级锁。  
+当有其他线程竞争时，才会释放锁，撤销偏向锁后，恢复未锁定或轻量级锁状态。
+#### 轻量级锁（执行时间短、竞争不激烈）
+轻量级锁每次退出同步块都需要释放锁，而偏向锁是在竞争发生时才释放锁；  
+每次进入退出同步块都需要CAS更新对象头；  
+争夺轻量级锁失败时，自旋尝试抢占锁；多次失败则升级为重量级锁  
+#### 重量级锁
+加锁、解锁过程和轻量级锁差不多，区别是：竞争失败后，线程阻塞，释放锁后，唤醒阻塞的线程。
+#### 锁消除
+锁消除指的就是虚拟机即使编译器在运行时，如果检测到那些共享数据不可能存在竞争，就执行锁消除。
+#### 锁粗化
+写代码时推荐将同步块的作用范围限制得尽量小——只在共享数据的实际作用域才进行同步，这样是为了使得需要同步的操作数量尽可能变小，如果存在锁竞争，那等待线程也能尽快拿到锁。  
+
+### Synchronized 和 ReenTrantLock 的对比
+两者都是可重入锁，都能实现多线程安全；  
+synchronized依赖于JVM；而ReenTrantLock依赖于API。所以synchronized使用相对简单，ReenTrantLock相对复杂。  
+ReenTrantLock比synchronized增加了一些高级功能。①等待可中断；②可实现公平锁；③可实现选择性通知
+1.6以前，synchronized的性能是比ReenTrantLock差很多。
+
 AQS
 ReentryLock
 #### 无锁队列Disruptor
