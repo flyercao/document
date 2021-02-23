@@ -71,6 +71,10 @@ ParNew收集器 -XX:+UseParNewGC 用于新生代，标记复制算法
 SPI 的第三方实现代码则是作为Java应用所依赖的 jar 包被存放在classpath路径下，Bootstrap类加载器无法直接加载。
 所以需要线程上下文类加载器（contextClassLoader）。初始线程的上下文类加载器是系统类加载器（AppClassLoader）,在线程中运行的代码可以通过此类加载器来加载类和资源。
 
+### 反射原理
+反射就是运行过程中动态加载类、获取类信息、调用类方法等。类class加载到内存后以class 实例对象的形式存在。通过class.forName获取类对象。
+性能：1. 编译器没法对反射相关的代码做优化（JIT ）；2.类名和方法名初次查找耗时；3.类型检查，可见性检查等；
+
 ### SPI
 Java提供的一套用来被第三方实现或者扩展的接口，用来启用框架扩展和替换组件。 SPI的作用就是为这些被扩展的API寻找服务实现。
 1. 通过当前线程类加载器和class对象，构造ServiceLoader；并且实例化一个LazyIterator；
