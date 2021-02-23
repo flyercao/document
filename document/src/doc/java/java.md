@@ -161,10 +161,16 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 应用场景：高性能跨线程通信，生产者消费者模型，日志处理。
 
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
-#### 缓存
-guava cache
+#### 缓存 guava cache
 异步加载
 过期移除、容量移除、引用移除、显示移除
 异步刷新
 移除监听
 统计信息
+
+#### 限流器rateLimiter
+https://blog.csdn.net/netyeaxi/article/details/104270337
+漏桶算法：控制流量，超过则丢弃。
+令牌桶算法：控制流量，允许短暂突发大流量。
+guava rateLimiter：（当前时间-上次空桶时间）* 速率    上次空桶时间<当前表示有可用令牌，可取并可预支；大于表示已预支，本次获取失败。
+分布式限流：redisson.getRateLimiter
