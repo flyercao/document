@@ -164,6 +164,11 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 批量效应：当消费者等待RingBuffer中可用的前进游标序号时，如果消费者发现RingBuffer游标自上次检查以来已经前进了多个序号，消费者可以直接处理所有可用的多个序号，而不用引入并发机制。
 应用场景：高性能跨线程通信，生产者消费者模型，日志处理。
 
+#### ThreadLocal
+Thread类中有两个ThreadLocalMap类型的本地变量threadLocals和inheritableThreadLocals，而ThreadLocal<T>相当于map的key。
+ThreadLocalMap内部实际上是一个Entry数组，该Entry的key是ThreadLocal<T>的WeakReference弱引用，弱引用的对象在没有其他强引用时会被gc回收。但是Entry<null,value>依然存在，造成了泄露。
+Entry的Key设置成弱引用是为了对ThreadLocal<T>进行回收。否则，当ThreadLocal<T>的强引用置为null后，Entry的Key为强引用的话，则ThreadLocal<T>无法进行回收。
+
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存 guava cache
 异步加载
