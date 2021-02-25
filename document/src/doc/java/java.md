@@ -22,6 +22,12 @@
 ### 直接内存
 为避免在Java堆和Native堆中来回复制数据，在虚拟机之外分配的内存，受限于机器内存。
 
+JVM调优
+内存： -Xmx3550m -Xms3550m -Xss128k -XX:NewRatio=4 -XX:SurvivorRatio=4 -XX:MaxMetaSpaceSize=128m -XX:MaxTenuringThreshold=0
+回收器： -XX:+UseConcMarkSweepGC -XX:CMSFullGCsBeforeCompaction=5 -XX:+UseCMSCompactAtFullCollection
+辅助信息：-XX:+PrintGC Printetails  -XX:+PrintGCApplicationStoppedTime
+
+
 ## 垃圾回收器
 ParNew收集器 -XX:+UseParNewGC 用于新生代，标记复制算法
 ### CMS（Concurrent Mark Sweep） 
