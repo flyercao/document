@@ -2,7 +2,13 @@
 
 ## 数据结构
 ### hashMap
+结合数组（查找快）和链表/树（增删快）  数据结构特点。
+1.7头插法，容易出现逆序导致死循环；1.8尾插法
+ConcurrentHashMap线程安全：采用table数组元素作为锁，对每一行数据进行加锁。使用Synchronized和CAS来并发控制。
 ### 二叉树
+treeSet
+treeMap
+
 
 
 ## JVM内存
