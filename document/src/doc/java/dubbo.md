@@ -76,6 +76,7 @@ Broadcast：广播调用，将调用所有服务提供者，一个服务调用�
 Failback：调用失败后，返回成功，但会在后台定时任务重试，重试次数（反复）。通常用于消息通知，但消费者重启后，重试任务丢失。
 Failsafe：调用失败，返回成功。调用审计测试等，日志类服务接口。
 Forking：并行调用多个服务提供者，当一个服务提供者返回成功，则返回成功。实时性要求比较高的场景，但浪费服务器资源，通常可以通过forks参数设置并发调用度。
+oneway：只管发送成功，不管处理结果。类似发消息场景。
 
 序列化MonitorFilter
 Dubbo支持多种序列化协议，java、compactedjava、nativejava、fastjson、fst、hessian2、kryo，其中默认hessian2。
@@ -131,7 +132,7 @@ bug：异步调用模式下，dubbo异步调用具有传递性，不过只会传
 1. 定义接口返回结果为CompletableFuture类型，使业务执行已从 Dubbo 线程切换到业务线程，避免了对 Dubbo 线程池的阻塞。
 2. 通过AsyncContext手动传递上下文，异步执行逻辑，再写Response。
 
-全异步网关
+全异步非阻塞网关
 结合服务端异步执行AsyncContext+客户端异步调用+客户端事件通知实现高性能网关。
 1.服务A的dubbo业务线程收到请求进行业务处理后，异步调用依赖服务B，并且在Future上绑定事件通知接口（onReturn和onThrow），直接返回；
 2.netty的io线程没有分发Response响应事件，所有实际收到服务B的响应后，是netty的IO线程来处理；
@@ -169,7 +170,7 @@ DubboMonitor通过后台定时任务将统计数据RPC发送到独立的监控�
 
 SPI
 SPI是JDK内置的一种服务提供发现机制，通过插件配置的形式给应用添加功能。dubbo框架通过SPI机制实现内核与扩展点的动态关联。SPI 的缺点。1.JDK 标准的 SPI 会一次性加载实例化扩展点的所有实现，浪费资源；2.如果扩展点加载失败，会导致调用方报错；
-Dubbo SPI进行了优化；提供自适应扩展、指定名称扩展和激活扩展。
+Dubbo SPI进行了优化；提供自适应扩展、指定名称扩展和激活扩展。实现按需加载实现类
 https://segmentfault.com/a/1190000024443652?utm_source=sf-related
 
 
