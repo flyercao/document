@@ -181,8 +181,16 @@ Thread类中有两个ThreadLocalMap类型的本地变量threadLocals和inheritab
 ThreadLocalMap内部实际上是一个Entry数组，该Entry的key是ThreadLocal<T>的WeakReference弱引用，弱引用的对象在没有其他强引用时会被gc回收。但是Entry<null,value>依然存在，造成了泄露。
 Entry的Key设置成弱引用是为了对ThreadLocal<T>进行回收。否则，当ThreadLocal<T>的强引用置为null后，Entry的Key为强引用的话，则ThreadLocal<T>无法进行回收。
 
+#### 本地缓存
+LRU:如果数据最近被访问过，那么将来被访问的几率也更高。根据数据的历史访问时间来进行淘汰数据。linkedList+HashMap实现LRU，或LinkedHashMap实现。实现简单，容易被批量查询污染。
+LRU-K（LRU-2）：缓存最近使用过K次的数据，淘汰小于K次的数据。降低了“缓存污染”带来的问题，命中率比LRU要高。历史队列linkedList+LRU缓存队列。linkedList保存小于K的数据，附加最后访问时间和最近访问次数。实际应用中LRU-2是综合各种因素后最优的选择。
+Two queues(2Q)：其实是LRU-2的一个实现版本。并且2Q的历史队列是采用FIFO的方法进行缓存的。
+Muti Queue(MQ)：MQ算法其实是2Q算法的一个扩展。根据访问频率将数据划分为多个队列，不同的队列具有不同的访问优先级。成本较大。
+
 disruptor:https://www.cnblogs.com/daoqidelv/p/7043696.html
 #### 缓存 guava cache
+类似ConcurrentHashMap下的线程安全LRU（分段锁）；Segment中AccessQueue（访问双向列表，非线程安全）、WriteAccess（写入双向列表，非线程安全，要获取锁）和RecencyQueue（暂存访问队列，线程安全）。
+为了让get方法不阻塞，get时会尝试获取Segment锁，成功则加锁，调整AccessQueue数据顺序；失败则把访问数据记录往RecencyQueue，后续获取锁成功才把RecencyQueue数据更新到AccessQueue。
 异步加载
 过期移除、容量移除、引用移除、显示移除
 异步刷新
