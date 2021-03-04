@@ -35,12 +35,21 @@ JVM调优
 
 
 ## 垃圾回收器
+### 垃圾识别算法
+引用计数法：统计对象被引用的次数，为0则表示该对象可以被回收。缺点是如果对象之间存在循环依赖，则这些对象无法被回收。
+可达性算法：从一个被称为GC Roots的对象开始向下搜索，如果一个对象到GC Roots没有任何引用链相连时，则说明此对象不可用。GC Roots对象包括（虚拟机栈中对象、方法区类静态属性、方法区常量池、本地方法栈JNI引用对象）
+
+分代回收的意义：针对不同年代对象存活时间的特点，采用不同的垃圾回收算法，提高垃圾回收的效率。
+年轻代：复制回收算法。对Eden区和其中一块Survivor区对象进行分析，存活超过年代阈值（默认15）的对象移动到老年代，其余存活对象复制到另一块Survivor区。
 ParNew收集器 -XX:+UseParNewGC 用于新生代，标记复制算法
 ### CMS（Concurrent Mark Sweep） 
 ![](https://img2018.cnblogs.com/blog/1326194/201810/1326194-20181017221500926-2071899824.png)
-老年代回收算法，最短回收停顿时间为目标。标记清理算法，并发收集、低停顿；  
-占用CPU;产生大量内存碎片;浮动垃圾导致另一次full gc   
+老年代回收算法，最短回收停顿时间为目标。标记清理算法，并发收集、低停顿；
 初始标记（STW）、并发标记、重新标记（STW）、并发清除  
+占用CPU：垃圾回收线程与应用线程并发执行，互相抢占CPU资源，对应用程序造成影响。
+回收频率：在CMS 回收过程中，应用程序仍然在不停地产生新对象，要确保有足够的内存空间。因此，CMS 收集器在内存饱和之前就开始进行回收。默认阈值是68%。
+回收器退化：如果回收过程中内存不足，CMS回收失败，启动老年代串行收集器。应用程序将完全中断，直到垃圾收集完成，应用程序可能出现长时间停顿。可以根据老年代内存增长速度调整启动回收的阈值。增长慢，则调大阈值，有效降低 CMS 的触发频率，改善程序性能。
+内存碎片：标记-清除算法会导致大量内存碎片，无法分配大对象，会提前进行垃圾回收。可以通过参数设置每次垃圾回收后进行内存碎片整理和设定进行多少次 CMS 回收后，进行一次内存压缩。  
 ```
 -Xms堆空间初始值；-Xmx对空间最大值；-Xmn年轻代大小；-XX:SurvivorRation年轻代Eden区与Survivor区的比例；-XX:PretenureSizeThreshold大对象阈值；
 -XX:+UseConcMarkSweepGC老年代使用CMS回收算法；-XX:+UseCMSCompactAtFullCollection Fullgc后对内存进行压缩；
@@ -180,6 +189,8 @@ CAS：处理器需要对指令pipeline加锁以确保原子性，并且会用到
 Thread类中有两个ThreadLocalMap类型的本地变量threadLocals和inheritableThreadLocals，而ThreadLocal<T>相当于map的key。
 ThreadLocalMap内部实际上是一个Entry数组，该Entry的key是ThreadLocal<T>的WeakReference弱引用，弱引用的对象在没有其他强引用时会被gc回收。但是Entry<null,value>依然存在，造成了泄露。
 Entry的Key设置成弱引用是为了对ThreadLocal<T>进行回收。否则，当ThreadLocal<T>的强引用置为null后，Entry的Key为强引用的话，则ThreadLocal<T>无法进行回收。
+如果把ThreadLocal实例定义为类中的静态变量，则该实例的引用不会被释放（除非该类被回收）也就不会出现key为null的Entry了。但是如果线程复用的场景中，当前请求可能获取到上一个请求的数据，导致结果不正确。
+结论：使用ThreadLocal后一定要remove。
 
 #### 本地缓存
 LRU:如果数据最近被访问过，那么将来被访问的几率也更高。根据数据的历史访问时间来进行淘汰数据。linkedList+HashMap实现LRU，或LinkedHashMap实现。实现简单，容易被批量查询污染。
